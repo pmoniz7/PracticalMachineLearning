@@ -1,30 +1,139 @@
 ---
 title: "PracticalMachineLearning"
 author: "Paulo Moniz"
-date: "21 de setembro de 2017"
+date: "November 08, 2017"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+
 ```
 
-## R Markdown
+##Loading Dataset
+The datasets were obtained from the following addresses :
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Dataset Training : 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r }
+pml_train <- read.csv("pml-training.csv", sep = ",", header=TRUE)
 
-```{r cars}
-summary(cars)
+dim(pml_train)
+
+```
+<br/>
+Dataset Testing
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r }
+#Dataset with 20 test cases
+test_cases <- read.csv("pml-testing.csv", sep = ",", header=TRUE)
+dim(test_cases)
 ```
 
-## Including Plots
+<br/>
+Fills with "Na' the variables with "" or "DIV/0!" content
 
-You can also embed plots, for example:
+```{r }
+pml_train[pml_train == ""] <- NA
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+pml_train[pml_train == "DIV/0!"] <- NA
+
+```
+<br/>
+All variables with a high number of observations with "Na" Were removed.
+
+```{r }
+pml_train <- pml_train[ , apply(pml_train, 2, function(x) !any(is.na(x)))]
+
+dim(pml_train)
+
+names(pml_train)
+
+```
+<br/>
+Remove the variables X, user_name, raw_timestamp_part_1,  raw_timestamp_part_2, cvtd_timestamp, new_window, num_window   
+
+```{r }
+pml_train <- pml_train[,c(08:60)]
+
+dim(pml_train)
+
+```
+<br/>
+Here we verify there is no more "Na" value variables
+
+```{r }
+table (pml_train$classe)  
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+##Plotting Predictors<br/>
+Here, i will put some data to try to get some information and check if there are predictors that can be excluded from the training of the model
+```{r }
+
+library(ggplot2); library(caret)
+
+predictors <- c("accel_arm_x", "accel_arm_y", "accel_arm_z")        
+
+featurePlot(x=pml_train[,predictors],y = pml_train$classe,plot="pairs")
+
+predictors <- c("accel_forearm_x", "accel_forearm_y", "accel_forearm_z")       
+
+featurePlot(x=pml_train[,predictors],y = pml_train$classe,plot="pairs")
+
+qplot(total_accel_arm, total_accel_forearm, colour=classe, data=pml_train)
+
+```
+
+
+
+
+```{r }
+set.seed(11014)
+
+inTrain <- createDataPartition(y=pml_train$classe, p=0.75, list=FALSE)
+
+training <- pml_train[inTrain, ]
+
+testing <- pml_train[-inTrain, ]
+
+```
+
+##Models Selection
+For this study we seek to find an algorithm that best classifies the classes (A, B, C, D, E). The main idea is to find an algorithm that deals with classification problem (multiclasses) and that in the end it is applied on a Dataset with 20 cases that will verify the efficiency of the algorithm.
+His algorithm should have great accuracy, be executed in a reasonable time, treat a reasonable amount of variables, as well as the high correlation between some of these variables. In order to solve the problem of multiclass classification, two algorithms were used for the construction of the models (Decision Tree and Random Forest). Finally, after comparing these models, we chose to use the Random Forest model because this model can handle a large number of variables and the high correlation between some of these and estimate the important ones in the classification.
+
+#Decision Tree Model
+```{r }
+library(rpart)
+
+model_rpart <- rpart(classe ~ ., data=training, method="class")
+
+pred_rpart  <- predict(model_rpart, training, type = "class")
+
+confusionMatrix(pred_rpart, training$classe)
+```
+
+
+```{r }
+library(randomForest)
+
+model_FR <- randomForest(classe~., data=training, importance = TRUE, ntrees = 3)
+
+pred_FR <- predict(model_FR, training)
+
+confusionMatrix(pred_FR, training$classe)
+
+```
+
+##Aplication of Model trained on testing Dataset
+```{r }
+pred <- predict(model_FR, test_cases)
+
+pred
+
+```
+
